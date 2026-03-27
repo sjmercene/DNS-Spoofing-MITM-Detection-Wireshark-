@@ -1,74 +1,79 @@
-# 🔐 VNC Exploitation & Traffic Analysis
+# 🔐 DNS Spoofing & MITM Detection (Wireshark)
 
 ## 📌 Overview
-This project documents a hands-on cybersecurity lab completed on TryHackMe.  
-The objective was to identify exposed services, gain access to a target system, extract sensitive data, and analyse captured network traffic using Wireshark.
+This project documents a cybersecurity investigation into a Man-in-the-Middle (MITM) attack involving ARP poisoning and DNS spoofing. The objective was to analyse captured network traffic and identify malicious behaviour using Wireshark.
 
 ---
 
 ## 🎯 Objectives
-- Perform network reconnaissance  
-- Identify exposed services  
-- Gain access to a remote system  
-- Locate and extract sensitive files  
-- Analyse network traffic for useful data  
+- Analyse DNS traffic using Wireshark
+- Establish baseline (legitimate DNS behaviour)   
+- Identify rogue DNS responses 
+- Detect DNS spoofing attack
+- Understand how MITM attacks redirect traffic  a  
 
 ---
 
-## 🖥️ Environment
-- **Attacker Machine:** Kali Linux (VirtualBox)  
-- **VPN:** OpenVPN connection to TryHackMe lab network  
-- **Target Machine:** Linux system with exposed VNC service  
+## 🧰 Tools Used
+- **Wireshark** 
+- **Kali Linux**    
 
 ---
 
-## 🔍 Reconnaissance
+## 🌐 Network Overview
 
-### Nmap Scan
+| Role | IP Address | Description |
+|------|------------|-------------|
+| Victim | 192.168.10.10 | Target user machine |
+| Gateway | 192.168.10.1 | Network router |
+| Attacker | 192.168.10.55 | Rogue system performing the MITM attack |
+| DNS Server | 8.8.8.8 | Legitimate DNS resolver |
+
+---
+
+## 🔍 Step 1 – Baseline DNS Behaviour
+
+**Filter Used:**
 ```bash
-nmap -T4 <target-ip>
+dns.flags.response == 1 && ip.src == 8.8.8.8
 ```
-### Results
 
-- 22/tcp → SSH  
-- 80/tcp → Web (WebSockify)  
-- 5901/tcp → VNC  
+### Findings
+- A DNS response was observed from **192.168.10.55**, which is not the legitimate DNS server  
+- The rogue response resolved the domain to:
+```text
+corp-login.acme-corp.local → 192.168.10.55
+```
+## Analysis
 
-### Key Finding
+- **192.168.10.55** is an internal host and not the legitimate DNS server  
+- It is sending DNS responses, which normal client machines should not do  
+- The same domain received conflicting responses from different sources  
 
-Port 5901 indicated a VNC service, and port 80 revealed a WebSockify server, suggesting a web-based VNC interface.
+This behaviour indicates **DNS spoofing**, where a malicious system forges DNS replies to redirect traffic.
 
-## 📸 Screenshots
+## Attack Chain Identified
 
-### Nmap Scan
-![image alt](https://github.com/sjmercene/sjmercene/blob/69432a4149acb3a7d91e2cd8d1b3023c84cca732/NmapScan.jpg)
-This scan identified three open ports on the target:
-- 22/tcp (SSH)
-- 80/tcp (WebSockify)
-- 5901/tcp (VNC)
+From analysing the traffic, it looks like this attack happened in multiple stages:
 
-The presence of port 5901 indicated a VNC service, suggesting potential remote desktop access.
+### 1. ARP Spoofing
+The attacker first placed themselves between the victim and the network gateway.  
+This allows them to see and control the traffic.
 
+### 2. DNS Spoofing
+When the victim tried to access `corp-login.acme-corp.local`, both the real DNS server and the attacker responded.
 
-### VNC Access
-![image alt](https://github.com/sjmercene/sjmercene/blob/b4407705d5e2610533ae5c84c7f7b458407de8f0/VNC%20Viewer.png)
+The attacker sent a fake response, pointing the domain to their own IP address instead of the real one.
 
-The screenshot shows a successful connection to the target system via VNC.
+### 3. Traffic Redirection
+Because of this, the victim could be redirected to the attacker’s machine instead of the legitimate server.
 
-A remote desktop session was established after identifying the VNC service on port 5901. The login was successful using weak credentials (`root`), providing full graphical access to the system.
+This could be used to capture login details or display a fake website.
 
-This confirms that the VNC service was exposed and improperly secured, allowing unauthorized access.
+## 🧾 Conclusion
 
+Based on the analysis, this appears to be a DNS spoofing attack as part of a Man-in-the-Middle scenario.
 
-### ARP Traffic Analysis
-![image alt](https://github.com/sjmercene/sjmercene/blob/b4407705d5e2610533ae5c84c7f7b458407de8f0/ARP%20Traffic%20Overview.jpg)
+The attacker at **192.168.10.55** sent a forged DNS response for `corp-login.acme-corp.local`, redirecting the victim away from the legitimate server (**192.168.10.200**) to their own machine.
 
-The screenshot displays captured ARP packets in Wireshark.
-
-The traffic shows standard ARP request and response behaviour:
-- “Who has [IP address]?” → ARP request  
-- “[IP address] is at [MAC address]” → ARP reply  
-
-This indicates normal network communication where devices resolve IP addresses to MAC addresses.
-
-No abnormal or suspicious ARP activity (such as duplicate replies or spoofing indicators) was observed during this capture.
+This shows how attackers can manipulate DNS responses to trick users into connecting to the wrong system, which could lead to credential theft or further compromise.
