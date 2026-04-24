@@ -82,7 +82,7 @@ This could lead to credential theft or fake login pages
 <br>
 
 Filter: ```dns```
-![image alt](https://github.com/sjmercene/sjmercene/blob/main/DNS.png)
+![image alt](https://github.com/sjmercene/sjmercene/blob/DNS-MIDM-Images/DNS.png)
 - I used this filter to view all DNS traffic and identify domain names being requested on the network.
 - From the “Info” column, I observed several domains including: updates.acme-corp.local, corp-login.acme-corp.local, cdn.svc.net, www.google.com
 - Some domains such as www.google.com appear normal and expected.
@@ -96,7 +96,7 @@ Filter: ```dns```
 ```bash
 dns.flags.response == 1 && ip.src == 8.8.8.8 && dns.qry.name == "corp-login.acme-corp.local"
 ```
-![image alt](https://github.com/sjmercene/sjmercene/blob/main/Legitimate%20DNS%20Response.png)
+![image alt](https://github.com/sjmercene/sjmercene/blob/DNS-MIDM-Images/Legitimate%20DNS%20Response.png)
 
 
 - This screenshot shows a DNS response from **8.8.8.8**, which is the legitimate DNS server.
@@ -110,7 +110,7 @@ This is an example of DNS spoofing. The attacker is telling the victim to visit 
 
 filter: ```dns.flags.response == 1 && ip.src != 8.8.8.8```
 
-![image alt](https://github.com/sjmercene/sjmercene/blob/main/Rogue%20DNS.JPG)
+![image alt](https://github.com/sjmercene/sjmercene/blob/DNS-MIDM-Images/Rogue%20DNS.JPG)
 - This filter was used to isolate DNS responses that do not originate from the legitimate DNS server (8.8.8.8).
 - The results show DNS responses coming from internal systems, such as 192.168.10.55, which should not normally act as a DNS server.
 - This indicates that a rogue system is attempting to impersonate a DNS server and send forged responses.
