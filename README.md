@@ -36,7 +36,7 @@ Instead of finding out what IP address was used by the attacker, I focused on ho
 
 ---
 
-## 🧰 Tools Used
+## Tools Used
 - **Tool:** Wireshark
 - **OS:** Kali Linux
 - **Protocol Analysis:** DNS, ARP, TCP/IP
