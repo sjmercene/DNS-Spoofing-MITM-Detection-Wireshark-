@@ -3,11 +3,17 @@
 ## 📌 Overview
 In this lab, I investigated a suspected Man-in-the-Middle attack involving ARP poisoning and DNS spoofing.
 
-Using Wireshark, I analysed captured network traffic to compare legitimate DNS behaviour against suspicious DNS responses coming from an unexpected internal host.
+The packet capture (.pcap) file was sourced via a controlled lab environment on TryHackMe. After completing the lab, I decided to access the environment via VNC, exported the capture, and performed further independent analysis within my own Kali Linux VM using Wireshark.
 
-Rather than only identifying the final attacker IP, I worked through the traffic step by step to understand how the attack occurred and how DNS spoofing can redirect a victim to a malicious system.
+I chose to do this beyond the guided exercise and explore the traffic in more depth, with the goal and curiosity of understanding how a real-world analyst would approach and investigate the attack.
 
-This project demonstrates my ability to:
+Using Wireshark, I established a baseline of normal DNS behaviour and identified anomalies where DNS responses were being spoofed by an internal host rather than the legitimate external DNS server.
+
+Instead of finding out what IP address was used by the attacker, I focused on how the attack occurred in the first place and how the DNS spoofing resulted in a victim accessing a fake site hosted in a malicious system.
+
+
+
+**This project demonstrates my ability to:**
 
 - Analyse DNS traffic in Wireshark
 - Identify legitimate and suspicious DNS responses
@@ -51,83 +57,99 @@ This project demonstrates my ability to:
 ---
 
 ## Investigation Summary
-During the investigation, I focused on the domain:
+During the investigation, I focused on the domain:  
 
-`corp-login.acme-corp.local`
+`corp-login.acme-corp.local`  
 
-This stood out because login-related domains are high-value targets in phishing and credential theft attacks.
+This domain stood out to me as login-related services are commonly targeted in credential harvesting and phishing attacks, which I became familiar with during my Certificate IV in Cyber Security studies.  
 
-The legitimate DNS server resolved this domain to:
+Using Wireshark, I analysed the DNS traffic to first understand what normal behaviour looked like, then compared it against anything unusual. I observed that the legitimate DNS server resolved this domain to:  
 
-`192.168.10.200`
+`192.168.10.200`  
 
-However, I also observed a DNS response from:
+However, I also identified DNS responses for the same query originating from:  
 
-`192.168.10.55`
+`192.168.10.55`  
 
-This was suspicious because normal client machines should not be responding to DNS queries. This indicated that the attacker was attempting to impersonate a DNS server and redirect the victim.
+Based on my understanding of how DNS should operate, this was immediately suspicious, as standard client machines should not generate DNS responses. Legitimate responses are expected to come from authorised DNS servers only and not internal.  
 
-## ✅ Verification
+I also noticed multiple responses being returned for the same DNS query, which further indicated something was not right.  
 
-### DNS Traffic Overview
+From this information gathered, I concluded that an internal system was attempting to impersonate a DNS server, consistent with DNS spoofing techniques used to redirect victims to malicious destinations.  
 
-<img src="https://github.com/sjmercene/sjmercene/blob/DNS-MIDM-Images/DNS.png" width="900">
+---
 
-**Filter Used:**
+## ✅ Verification  
+
+### DNS Traffic Overview  
+
+<img src="https://github.com/sjmercene/sjmercene/blob/DNS-MIDM-Images/DNS.png" width="900">  
+
+**Filter Used:**  
 
 ```text
 dns
 ```
 
-I started by filtering all DNS traffic to understand what domains were being requested on the network.
+I began by filtering for all DNS traffic to get a clear view of what domains were being requested across the network.  
 
-From the Wireshark Info column, I observed several domain lookups including:
+From the Wireshark *Info* column, I observed several domain lookups, including:  
 
-updates.acme-corp.local
-corp-login.acme-corp.local
-cdn.svc.net
-www.google.com
+- `updates.acme-corp.local`  
+- `corp-login.acme-corp.local`  
+- `cdn.svc.net`  
+- `www.google.com`  
 
-Some domains, such as www.google.com, appeared normal and expected.
+Some domains, such as `www.google.com`, appeared normal and expected for typical user activity.  
 
-However, internal domains such as updates.acme-corp.local and corp-login.acme-corp.local were more interesting because they may represent internal services.
+However, internal domains like `updates.acme-corp.local` and `corp-login.acme-corp.local` drew more attention, as they likely represent internal services within the network.  
 
-The domain corp-login.acme-corp.local stood out because it appears to be related to authentication or login activity, making it a likely target for credential theft.
-
----
-
-## Legitimate DNS Response
-<img src="https://github.com/sjmercene/sjmercene/blob/DNS-MIDM-Images/Legitimate%20DNS%20Response.png" width="900">
-
-Filter used:
-`dns.flags.response == 1 && ip.src == 8.8.8.8 && dns.qry.name == "corp-login.acme-corp.local"`
-
-I used this filter to identify DNS responses coming from the legitimate DNS resolver, 8.8.8.8.
-
-This confirmed that the victim machine, 192.168.10.10, requested the domain: `corp-login.acme-corp.local`
-
-The legitimate DNS response resolved the domain to:`corp-login.acme-corp.local -> 192.168.10.200` 
-
-This gave me a baseline for what the correct DNS behaviour should look like.
+In particular, `corp-login.acme-corp.local` stood out to me the most. Based on my understanding of how attackers typically target authentication services, login-related domains are often used in credential harvesting attempts. For this reason, I prioritised further analysis on this domain to determine whether any suspicious behaviour was present.
 
 ---
 
-## Rogue DNS Response Detected
-<img src="https://github.com/sjmercene/sjmercene/blob/DNS-MIDM-Images/Rogue%20DNS.JPG" width="900">
+## Legitimate DNS Response  
 
-Filter Used:
+<img src="https://github.com/sjmercene/sjmercene/blob/DNS-MIDM-Images/Legitimate%20DNS%20Response.png" width="900">  
 
-`dns.flags.response == 1 && ip.src != 8.8.8.8`
+**Filter Used:**  
+`dns.flags.response == 1 && ip.src == 8.8.8.8 && dns.qry.name == "corp-login.acme-corp.local"`  
 
-After confirming the legitimate DNS response, I filtered for DNS responses that did not come from the approved DNS server.
+I used this filter to narrow down the traffic to only DNS responses (not queries), specifically for the domain `corp-login.acme-corp.local`, and only from the known legitimate DNS resolver (`8.8.8.8`).  
 
-This revealed DNS responses coming from: `192.168.10.55`
+My goal was to isolate a trusted response so I could clearly identify what the correct IP resolution should be before investigating any anomalies.  
 
-This was suspicious because 192.168.10.55 is not the legitimate DNS server.
+From this, I confirmed that the victim machine (`192.168.10.10`) had issued a DNS query for the domain.  
 
-A normal client machine should not be replying to DNS queries. The fact that this internal host was sending DNS responses suggests that it was attempting to impersonate a DNS server.
+The legitimate DNS response resolved the domain as follows:  
 
-This behaviour is consistent with DNS spoofing, where an attacker sends forged DNS responses to redirect the victim to a malicious destination.
+`corp-login.acme-corp.local → 192.168.10.200`  
+
+This gave me a reliable baseline of expected DNS behaviour, which I later used to compare against any conflicting or suspicious responses.
+
+---
+
+## Rogue DNS Response Detected  
+
+<img src="https://github.com/sjmercene/sjmercene/blob/DNS-MIDM-Images/Rogue%20DNS.JPG" width="900">  
+
+**Filter Used:**  
+
+`dns.flags.response == 1 && ip.src != 8.8.8.8`  
+
+After establishing a baseline using the legitimate DNS server, I adjusted the filter to identify DNS responses that were not coming from the trusted resolver (`8.8.8.8`).  
+
+The purpose of this was to quickly highlight any unexpected sources responding to DNS queries, which could indicate spoofing activity.  
+
+From this, I identified DNS responses originating from:  
+
+`192.168.10.55`  
+
+Based on my earlier analysis, this was already suspicious because this IP address is not a legitimate DNS server within the network.  
+
+Normally, client machines only send DNS queries but do not generate responses. From my observations the internal host returning DNS responses suggests that it was impersonating a DNS server.  
+
+When compared with the legitimate response previously identified, this behaviour is consistent with DNS spoofing, where an attacker sends forged DNS replies to redirect a victim to a malicious destination.  
 
 ---
 
@@ -151,47 +173,54 @@ This confirmed that 192.168.10.55 was behaving as a rogue DNS responder.
 
 ---
 
-## DNS Spoofing Confirmed
+## 🛠️ Analysis & Problem Solving  
 
-**Problem:**
-The same domain was associated with different DNS responses.
+### Suspicious DNS Behaviour  
 
-**Legitimate Resolution:**
+**Problem:**  
+The victim machine received DNS responses from a system that was not the legitimate DNS server.  
 
-corp-login.acme-corp.local -> 192.168.10.200
+**Expected Behaviour:**  
+DNS responses should only originate from the configured resolver: `8.8.8.8`  
 
-**Suspicious Activity:**
-The attacker sent a forged DNS response to the victim.
+**Observed Behaviour:**  
+In addition to the legitimate response, a DNS reply was also observed from: `192.168.10.55`  
 
-**Why This Matters:**
-If the victim accepts the forged DNS response, the victim could be redirected away from the legitimate server. This could then allow the attacker to host a fake login page or capture sensitive information from the victim.
+**Why This Is Suspicious:**  
+Based on standard DNS operation, client machines are expected to send queries, not responses. The IP address `192.168.10.55` was not configured as a DNS server, yet it was actively replying to DNS requests.  
 
-**Result:**
-This confirms a DNS spoofing attempt targeting corp-login.acme-corp.local.
+This indicates that the host was attempting to interfere with the normal DNS resolution process by injecting its own responses.  
+
+**Result:**  
+This confirms that `192.168.10.55` was acting as a rogue DNS responder which implies with DNS spoofing behaviour.
 
 ---
-## Final Result
+## 🧾 Conclusion  
 
-The investigation confirmed signs of a DNS spoofing attack as part of a Man-in-the-Middle scenario. The attacker at: `192.168.10.55`
-sent suspicious DNS responses to the victim: `192.168.10.10`
+The investigation confirmed clear indicators of a DNS spoofing attack as part of a Man-in-the-Middle (MITM) scenario. The attacker (`192.168.10.55`) was observed sending rogue DNS responses to the victim machine (`192.168.10.10`).  
 
-The target domain was: `corp-login.acme-corp.local`
+The targeted domain was:  
+`corp-login.acme-corp.local`  
 
-The legitimate server should have resolved to: `192.168.10.200`
+The legitimate DNS server correctly resolved this domain to:  
+`192.168.10.200`  
 
-This shows that the attacker attempted to manipulate DNS traffic and redirect the victim to a malicious destination.
+However, conflicting responses from the attacker indicate an attempt to manipulate DNS resolution and redirect the victim to a potentially malicious destination.  
 
-**What I Learned**
+This behaviour is consistent with DNS spoofing techniques commonly used in MITM attacks to intercept or redirect user traffic.  
 
-This project helped me understand:
+---
 
-- How to investigate DNS traffic in Wireshark
-- How to establish a baseline for legitimate DNS behaviour
-- How to identify suspicious DNS responses
-- Why client machines should not normally respond to DNS queries
-- How DNS spoofing can be used in MITM attacks
-- How attackers can redirect victims to malicious systems
-- How to explain packet analysis findings clearly
+## 📚 What I Learned  
 
+This project strengthened my ability to:  
+
+- Analyse DNS traffic using Wireshark  
+- Establish a baseline for legitimate network behaviour  
+- Identify anomalous DNS responses from unauthorised sources  
+- Understand why client machines should not generate DNS responses  
+- Recognise how DNS spoofing is used within MITM attacks  
+- Investigate how attackers can redirect victims to malicious systems  
+- Clearly document and communicate packet-level findings  
 
 
